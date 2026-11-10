@@ -1,0 +1,57 @@
+name: Publish IX Atlas
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '7,22,37,52 * * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: ix-atlas-pages
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      changed: ${{ steps.snapshot.outputs.changed }}
+    steps:
+      - uses: actions/checkout@v6
+      - name: Download the public WordPress atlas
+        id: snapshot
+        env:
+          EVENT: ${{ github.event_name }}
+        run: |
+          if [ "$EVENT" = schedule ]; then
+            python3 sync_atlas.py _site --only-if-changed
+          else
+            python3 sync_atlas.py _site
+          fi
+          if [ -d _site ]; then
+            echo 'changed=true' >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/upload-pages-artifact@v4
+        if: steps.snapshot.outputs.changed == 'true'
+        with:
+          path: _site
+
+  deploy:
+    needs: export
+    if: needs.export.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.pages.outputs.page_url }}
+    steps:
+      - name: Deploy the atlas
+        id: pages
+        uses: actions/deploy-pages@v4
