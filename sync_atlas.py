@@ -63,8 +63,19 @@ def public_manifest():
         if slot in occupied or counts[page] > SLOTS_PER_PAGE:
             raise ValueError("Duplicate cover slot or too many covers on an atlas page")
         occupied.add(slot)
-        result.append({"username": username, "atlas": {"pageIndex": page, "uvRect": rect}})
+        result.append({
+            "username": username,
+            "bodyColor": binding_color(entry.get("bodyColor")),
+            "atlas": {"pageIndex": page, "uvRect": rect},
+        })
     return {"schemaVersion": 1, "revision": revision, "books": result}, sorted(counts)
+
+
+def binding_color(value):
+    if not isinstance(value, str) or not re.fullmatch(r"#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})", value):
+        return "#282b34"
+    digits = value[1:].lower()
+    return "#" + ("".join(digit * 2 for digit in digits) if len(digits) == 3 else digits)
 
 
 def download_page(index):

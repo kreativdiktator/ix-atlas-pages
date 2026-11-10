@@ -1,6 +1,6 @@
 # IX Atlas für VRChat
 
-GitHub Pages veröffentlicht die freigegebenen Daten aus dem WordPress-Atlas von Immersive X. Die Buchliste enthält die öffentlichen Nutzernamen und die Koordinaten der Cover in den Sammelbildern. GitHub Actions überträgt die Daten als ein Pages-Paket.
+GitHub Pages veröffentlicht die freigegebenen Daten aus dem WordPress-Atlas von Immersive X. Die Buchliste enthält die öffentlichen Nutzernamen, die Einbandfarben und die Koordinaten der Cover in den Sammelbildern. GitHub Actions überträgt die Daten als ein Pages-Paket.
 
 - Buchliste unter `manifest.json`
 - Sammelbilder unter `pages/{pageIndex}.png`
