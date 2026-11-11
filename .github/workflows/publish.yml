@@ -22,6 +22,8 @@ jobs:
       changed: ${{ steps.snapshot.outputs.changed }}
     steps:
       - uses: actions/checkout@v6
+      - name: Install image tools
+        run: python3 -m pip install "Pillow>=11,<14"
       - name: Download the public WordPress atlas
         id: snapshot
         env:
