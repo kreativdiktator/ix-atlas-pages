@@ -4,6 +4,8 @@
 import argparse
 import json
 import math
+from io import BytesIO
+from PIL import Image
 from pathlib import Path
 import re
 import struct
@@ -66,9 +68,35 @@ def public_manifest():
         result.append({
             "username": username,
             "bodyColor": binding_color(entry.get("bodyColor")),
+            "frontTexture": source_front(entry.get("frontTexture")),
             "atlas": {"pageIndex": page, "uvRect": rect},
         })
     return {"schemaVersion": 1, "revision": revision, "books": result}, sorted(counts)
+
+
+def source_front(value):
+    if not isinstance(value, str) or not re.fullmatch(re.escape(SOURCE) + r"/front/[a-zA-Z0-9-]+\.png", value):
+        raise ValueError("Invalid public front-cover URL")
+    return value
+
+
+def compact_manifest(manifest):
+    base = PUBLISHED_MANIFEST.removesuffix("manifest.json")
+    return {**manifest, "books": [{**entry, "frontTexture": f"{base}covers/{manifest['revision']}/{index}.jpg"}
+                                  for index, entry in enumerate(manifest["books"])]}
+
+
+def download_cover(entry):
+    raw = fetch(entry["frontTexture"], "image/png", MAX_PNG_BYTES)
+    with Image.open(BytesIO(raw)) as source:
+        if source.width > 4096 or source.height > 4096:
+            raise ValueError("Front cover exceeds the pixel limit")
+        foreground = source.convert("RGBA").resize((512, 768), Image.Resampling.LANCZOS)
+        background = Image.new("RGB", foreground.size, entry["bodyColor"])
+        background.paste(foreground, mask=foreground.getchannel("A"))
+        output = BytesIO()
+        background.save(output, format="JPEG", quality=96, optimize=True, subsampling=0)
+        return output.getvalue()
 
 
 def binding_color(value):
@@ -102,7 +130,8 @@ def sync(output, only_if_changed):
     for attempt in range(3):
         try:
             manifest, pages = public_manifest()
-            if only_if_changed and already_published(manifest):
+            published = compact_manifest(manifest)
+            if only_if_changed and already_published(published):
                 print("The public atlas is already current.")
                 return False
             with tempfile.TemporaryDirectory(prefix="atlas-", dir=output.parent) as temporary:
@@ -115,11 +144,19 @@ def sync(output, only_if_changed):
                     if total > 950 * 1024 * 1024:
                         raise ValueError("Atlas images exceed the GitHub Pages site size limit.")
                     (site / "pages" / f"{index}.png").write_bytes(image)
+                fronts = site / "covers" / manifest["revision"]
+                fronts.mkdir(parents=True)
+                for index, entry in enumerate(manifest["books"]):
+                    cover = download_cover(entry)
+                    total += len(cover)
+                    if total > 950 * 1024 * 1024:
+                        raise ValueError("Atlas and covers exceed the site size limit")
+                    (fronts / f"{index}.jpg").write_bytes(cover)
                 latest, _ = public_manifest()
                 if latest != manifest:
                     raise ValueError("The WordPress atlas changed during the download.")
                 (site / "manifest.json").write_text(
-                    json.dumps(manifest, ensure_ascii=False, separators=(",", ":"), allow_nan=False) + "\n",
+                    json.dumps(published, ensure_ascii=False, separators=(",", ":"), allow_nan=False) + "\n",
                     encoding="utf-8",
                 )
                 site.rename(output)
